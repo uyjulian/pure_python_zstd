@@ -676,8 +676,13 @@ def rzb(dat: memoryview, st: DZstdState, out: Union[memoryview, None] = None):
 						st.o[0] = off
 					else:
 						off = st.o[0];
-				for i in range(ll):
-					buf[oubt + i] = buf[spl + i]
+				if oubt + ll > spl:
+					# non-overlapping copy
+					buf[oubt:oubt + ll] = buf[spl:spl + ll]
+				else:
+					# overlapping copy
+					for i in range(ll):
+						buf[oubt + i] = buf[spl + i]
 				oubt += ll
 				spl += ll
 				stin = oubt - off
@@ -686,18 +691,27 @@ def rzb(dat: memoryview, st: DZstdState, out: Union[memoryview, None] = None):
 					bs = st.e + stin
 					if blen > ml:
 						blen = ml
-					for i in range(blen):
-						buf[oubt + i] = st.w[bs + i]
+					buf[oubt:oubt + blen] = st.w[bs:bs + blen]
 					oubt += blen
 					ml -= blen
 					stin = 0
-				for i in range(ml):
-					buf[oubt + i] = buf[stin + i]
+				if oubt + ml > stin:
+					# non-overlapping copy
+					buf[oubt:oubt + ml] = buf[stin:stin + ml]
+				else:
+					# overlapping copy
+					for i in range(ml):
+						buf[oubt + i] = buf[stin + i]
 				oubt += ml
 			if oubt != spl:
 				llen = len(buf) - spl
-				for i in range(llen):
-					buf[oubt + i] = buf[spl + i]
+				if oubt + llen > spl:
+					# non-overlapping copy
+					buf[oubt:oubt + llen] = buf[spl:spl + llen]
+				else:
+					# overlapping copy
+					for i in range(llen):
+						buf[oubt + i] = buf[spl + i]
 				oubt += llen
 				spl += llen
 			else:
@@ -710,8 +724,13 @@ def rzb(dat: memoryview, st: DZstdState, out: Union[memoryview, None] = None):
 			if out != None:
 				st.y += lss
 				if spl != 0:
-					for i in range(lss):
-						buf[i] = buf[spl + i]
+					if 0 + lss > spl:
+						# non-overlapping copy
+						buf[0:0 + lss] = buf[spl:spl + lss]
+					else:
+						# overlapping copy
+						for i in range(lss):
+							buf[i] = buf[spl + i]
 			elif spl != 0:
 				buf = slc(buf, spl)
 		st.b = ebt
