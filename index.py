@@ -918,3 +918,9 @@ if __name__ == "__main__":
 			print("1000000 null test NG")
 		else:
 			print("1000000 null test OK")
+	elif len(sys.argv) > 3 and sys.argv[1] == "--test-file":
+		with open(sys.argv[2], "rb") as f:
+			data = memoryview(bytearray(f.read()))
+			decompressed = decompress(data)
+			with open(sys.argv[3], "wb") as wf:
+				wf.write(bytes(decompressed))
