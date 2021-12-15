@@ -42,14 +42,14 @@ class DZstdState:
 	# last block
 	e: int = 0
 
-def slc(v: memoryview, s: Union[None, int], e: Union[None, int] = None):
+def slc(v: memoryview, s: Union[None, int] = None, e: Union[None, int] = None):
 	if (s == None or s < 0):
 		s = 0
 	if (e == None or e > len(v)):
 		e = len(v)
 	return memoryview(bytearray(bytes(v[s:e])))
 
-def fill(v: memoryview, n: int, s: Union[None, int], e: Union[None, int] = None):
+def fill(v: memoryview, n: int, s: Union[None, int] = None, e: Union[None, int] = None):
 	if (s == None or s < 0):
 		s = 0
 	if (e == None or e > len(v)):
@@ -57,7 +57,7 @@ def fill(v: memoryview, n: int, s: Union[None, int], e: Union[None, int] = None)
 	v[s:e] = n.to_bytes(1, byteorder="little") * (e - s)
 	return v
 
-def cpw(v: memoryview, t: int, s: Union[None, int], e: Union[None, int] = None):
+def cpw(v: memoryview, t: int, s: Union[None, int] = None, e: Union[None, int] = None):
 	if (s == None or s < 0):
 		s = 0
 	if (e == None or e > len(v)):
