@@ -831,6 +831,7 @@ class Decompress:
 		if self.s == 0 or self.s == None:
 			if final is True:
 				if ncs != 0:
+					self.ondata(memoryview(bytearray()), True)
 					return
 				# min for frame + one block
 				if ncs < 5:
@@ -849,7 +850,7 @@ class Decompress:
 				return self.push(chunk, final)
 		if type(self.s) != int:
 			s_zstdstate = self.s
-			if ncs < (self.z if (self.z != 0) else 4):
+			if ncs < (self.z if (self.z != 0) else 3):
 				if final == True:
 					err(5)
 				self.c.append(chunk)
@@ -860,7 +861,7 @@ class Decompress:
 				chunk = cct(self.c, ncs)
 				self.c = []
 				self.l = 0
-			chunk_check = 5 if (chunk[s_zstdstate.b] & 2 != 0) else (4 + ((chunk[s_zstdstate.b] >> 3) | (chunk[s_zstdstate.b + 1] << 5) | (chunk[s_zstdstate.b + 2] << 13)))
+			chunk_check = 4 if (chunk[s_zstdstate.b] & 2 != 0) else (3 + ((chunk[s_zstdstate.b] >> 3) | (chunk[s_zstdstate.b + 1] << 5) | (chunk[s_zstdstate.b + 2] << 13)))
 			if self.z == 0 and ncs < chunk_check:
 				self.z = chunk_check
 				if final == True:
@@ -889,6 +890,8 @@ class Decompress:
 					self.s = s_zstdstate.c * 4
 					self.push(rest, final)
 					return
+		elif final:
+			err(5)
 
 	# Handler called whenever data is decompressed
 	ondata = None
