@@ -97,7 +97,7 @@ def b4(d: memoryview, b: int):
 	return (d[b] | (d[b + 1] << 8) | (d[b + 2] << 16) | (d[b + 3] << 24)) | 0
 
 # read Zstandard frame header
-def rzfh(dat: memoryview, w: Union[memoryview, int]) -> Union[int, DZstdState]:
+def rzfh(dat: memoryview, w: Union[memoryview, int] = 1) -> Union[int, DZstdState]:
 	n3 = dat[0] | (dat[1] << 8) | (dat[2] << 16)
 	if n3 == 0x2FB528 and dat[3] == 253:
 		# Zstandard
@@ -812,6 +812,7 @@ class Decompress:
 	"""
 	def __init__(self, ondata = None):
 		self.ondata = ondata
+		self.s = None
 		self.c = []
 		self.l = 0
 		self.z = 0
@@ -830,7 +831,7 @@ class Decompress:
 		ncs = sl + self.l
 		if self.s == 0 or self.s == None:
 			if final is True:
-				if ncs != 0:
+				if ncs == 0:
 					self.ondata(memoryview(bytearray()), True)
 					return
 				# min for frame + one block
@@ -862,8 +863,8 @@ class Decompress:
 				self.c = []
 				self.l = 0
 			chunk_check = 4 if (chunk[s_zstdstate.b] & 2 != 0) else (3 + ((chunk[s_zstdstate.b] >> 3) | (chunk[s_zstdstate.b + 1] << 5) | (chunk[s_zstdstate.b + 2] << 13)))
+			self.z = chunk_check
 			if self.z == 0 and ncs < chunk_check:
-				self.z = chunk_check
 				if final == True:
 					err(5)
 				self.c.append(chunk)
@@ -872,7 +873,7 @@ class Decompress:
 				self.z = 0
 			while True:
 				blk = rzb(chunk, s_zstdstate)
-				if blk == None:
+				if blk == None or len(blk) == 0:
 					if final == True:
 						err(5)
 					adc = chunk[s_zstdstate.b:]
@@ -899,31 +900,75 @@ class Decompress:
 # tests
 if __name__ == "__main__":
 	import sys
-	if "--run-tests" in sys.argv:
+	import io
+	testdata = {
 		# should decode to Ok
-		data = memoryview(bytearray([0x28, 0xB5, 0x2F, 0xFD, 0x24, 0x02, 0x11, 0x00, 0x00, 0x4F, 0x6B, 0x64, 0x50, 0xA9, 0x5A]))
-		decompressed = decompress(data, memoryview(bytearray(2)))
-		if decompressed != b"Ok":
-			print("Ok test NG")
-		else:
-			print("Ok test OK")
+		"Ok" : {
+			"data" : b"\x28\xB5\x2F\xFD\x24\x02\x11\x00\x00\x4F\x6B\x64\x50\xA9\x5A",
+			"result_data" : b"Ok",
+			"result_len" : 2,
+		},
 		# should decode to Lorem ipsum text
-		data = memoryview(bytearray([0x28, 0xB5, 0x2F, 0xFD, 0x24, 0x84, 0xFD, 0x02, 0x00, 0x92, 0x07, 0x15, 0x13, 0x90, 0x07, 0x0C, 0xC9, 0x6E, 0xBB, 0x5B, 0x93, 0x4C, 0x3E, 0x07, 0xB5, 0xE6, 0x59, 0xF1, 0x89, 0x6B, 0x52, 0xE9, 0x83, 0xDA, 0x40, 0xF8, 0x2D, 0xED, 0x1E, 0xA9, 0xCB, 0x01, 0x73, 0x2E, 0x97, 0x5D, 0xB9, 0x13, 0x5B, 0x66, 0x79, 0xAF, 0x81, 0x66, 0xE0, 0x43, 0x50, 0xFB, 0x47, 0xFB, 0x21, 0xFC, 0x89, 0x59, 0x0B, 0x3E, 0xB8, 0x8C, 0x4E, 0xC0, 0x9A, 0xAD, 0x42, 0x15, 0x72, 0x6D, 0x26, 0x1E, 0x5A, 0xCC, 0x39, 0xC1, 0x74, 0x72, 0xAE, 0xBD, 0xA6, 0x65, 0xF1, 0xEB, 0x2D, 0xD4, 0x8F, 0x34, 0x01, 0x01, 0x02, 0x00, 0x3E, 0x53, 0x53, 0xB3, 0xE6, 0x19, 0xB0, 0x58, 0x5B, 0x26]))
-		decompressed = decompress(data, memoryview(bytearray(132)))
-		if decompressed != b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam nec sem urna. Morbi mollis, massa a convallis iaculis, mauris neque.":
-			print("Lorem ipsum test NG")
-		else:
-			print("Lorem ipsum test OK")
+		"Lorem ipsum" : {
+			"data" : b"\x28\xB5\x2F\xFD\x24\x84\xFD\x02\x00\x92\x07\x15\x13\x90\x07\x0C\xC9\x6E\xBB\x5B\x93\x4C\x3E\x07\xB5\xE6\x59\xF1\x89\x6B\x52\xE9\x83\xDA\x40\xF8\x2D\xED\x1E\xA9\xCB\x01\x73\x2E\x97\x5D\xB9\x13\x5B\x66\x79\xAF\x81\x66\xE0\x43\x50\xFB\x47\xFB\x21\xFC\x89\x59\x0B\x3E\xB8\x8C\x4E\xC0\x9A\xAD\x42\x15\x72\x6D\x26\x1E\x5A\xCC\x39\xC1\x74\x72\xAE\xBD\xA6\x65\xF1\xEB\x2D\xD4\x8F\x34\x01\x01\x02\x00\x3E\x53\x53\xB3\xE6\x19\xB0\x58\x5B\x26",
+			"result_data" : b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam nec sem urna. Morbi mollis, massa a convallis iaculis, mauris neque.",
+			"result_len" : 132,
+		},
 		# should decode to 1000000 of nulls
-		data = memoryview(bytearray([0x28, 0xB5, 0x2F, 0xFD, 0xA4, 0x40, 0x42, 0x0F, 0x00, 0x54, 0x00, 0x00, 0x10, 0x00, 0x00, 0x01, 0x00, 0xFB, 0xFF, 0x39, 0xC0, 0x02, 0x02, 0x00, 0x10, 0x00, 0x02, 0x00, 0x10, 0x00, 0x02, 0x00, 0x10, 0x00, 0x02, 0x00, 0x10, 0x00, 0x02, 0x00, 0x10, 0x00, 0x02, 0x00, 0x10, 0x00, 0x03, 0x12, 0x0A, 0x00, 0xCC, 0xAE, 0xCA, 0x39]))
-		decompressed = decompress(data, memoryview(bytearray(1000000)))
-		if (len(decompressed) != 1000000 or sum(decompressed) != 0):
-			print("1000000 null test NG")
-		else:
-			print("1000000 null test OK")
+		"1000000 null" : {
+			"data" : b"\x28\xB5\x2F\xFD\xA4\x40\x42\x0F\x00\x54\x00\x00\x10\x00\x00\x01\x00\xFB\xFF\x39\xC0\x02\x02\x00\x10\x00\x02\x00\x10\x00\x02\x00\x10\x00\x02\x00\x10\x00\x02\x00\x10\x00\x02\x00\x10\x00\x03\x12\x0A\x00\xCC\xAE\xCA\x39",
+			"result_len" : 1000000,
+			"check_zero" : True,
+		},
+	}
+	if "--run-tests" in sys.argv:
+		for key in testdata:
+			decompressed = decompress(memoryview(bytearray(testdata[key]["data"])), memoryview(bytearray(testdata[key]["result_len"])))
+			result_ok = True
+			if "result_data" in testdata[key] and decompressed != testdata[key]["result_data"]:
+				result_ok = False
+			if "result_len" in testdata[key] and len(decompressed) != testdata[key]["result_len"]:
+				result_ok = False
+			if "check_zero" in testdata[key] and testdata[key]["check_zero"] and sum(decompressed) != 0:
+				result_ok = False
+			if not result_ok:
+				print(key + " test NG")
+			else:
+				print(key + " test OK")
+	elif "--run-tests-stream" in sys.argv:
+		for key in testdata:
+			with io.BytesIO() as wft:
+				def on_data(chunk, is_last):
+					wft.write(chunk)
+				decompress_obj = Decompress(on_data)
+				decompress_obj.push(memoryview(bytearray(testdata[key]["data"])), False)
+				decompress_obj.push(memoryview(bytearray()), True)
+				wft.seek(0)
+				decompressed = memoryview(bytearray(wft.read()))
+				result_ok = True
+				if "result_data" in testdata[key] and decompressed != testdata[key]["result_data"]:
+					result_ok = False
+				if "result_len" in testdata[key] and len(decompressed) != testdata[key]["result_len"]:
+					result_ok = False
+				if "check_zero" in testdata[key] and testdata[key]["check_zero"] and sum(decompressed) != 0:
+					result_ok = False
+				if not result_ok:
+					print(key + " test NG")
+				else:
+					print(key + " test OK")
 	elif len(sys.argv) > 3 and sys.argv[1] == "--test-file":
 		with open(sys.argv[2], "rb") as f:
-			data = memoryview(bytearray(f.read()))
-			decompressed = decompress(data)
+			decompressed = decompress(memoryview(bytearray(f.read())))
 			with open(sys.argv[3], "wb") as wf:
 				wf.write(bytes(decompressed))
+	elif len(sys.argv) > 3 and sys.argv[1] == "--test-file-stream":
+		with open(sys.argv[2], "rb") as f:
+			with io.BytesIO() as wft:
+				def on_data(chunk, is_last):
+					wft.write(chunk)
+				decompress_obj = Decompress(on_data)
+				decompress_obj.push(memoryview(bytearray(f.read())), False)
+				decompress_obj.push(memoryview(bytearray()), True)
+				wft.seek(0)
+				with open(sys.argv[3], "wb") as wf:
+					wf.write(wft.read())
